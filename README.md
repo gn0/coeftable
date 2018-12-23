@@ -7,6 +7,9 @@ The tools are:
 - `coeftable`: takes a template and a list of JSON data files, and generates the output.
 - `csv2textemplate`: takes a csv file, potentially with template shorthands, and converts it into a tex-formatted template for `coeftable` to use.
 
+The JSON data files can contain regression results or results from hypothesis tests.
+If you are using Stata, the [json_this](https://github.com/gn0/json-this) package can save your results in JSON for you.
+
 ## Installation
 
 To install this package using pip, type
