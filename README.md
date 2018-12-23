@@ -5,7 +5,7 @@ This Python package provides two command-line tools to generate arbitrarily form
 The tools are:
 
 - `coeftable`: takes a template and a list of JSON data files, and generates the output.
-- `csv2textemplate`: takes a csv file with template shorthands, and converts it into a tex-formatted template for `coeftable` to use.
+- `csv2textemplate`: takes a csv file, potentially with template shorthands, and converts it into a tex-formatted template for `coeftable` to use.
 
 ## Installation
 
@@ -194,7 +194,7 @@ N,%(1::N)d,%(2::N)d
 #: \bottomrule
 ```
 
-Feeding it to `csv2textemplate`, we see how it expands the shorthand forms:
+Feeding it to `csv2textemplate`, we see how the shorthand forms are expanded:
 
 ```
 \toprule
