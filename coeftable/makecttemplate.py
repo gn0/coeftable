@@ -1,4 +1,5 @@
 import argh
+import re
 import operator as op
 import itertools as it
 import copy
@@ -31,16 +32,46 @@ assert into_list_if_not_None(1, None, 2) == [1, 2]
 assert into_list_if_not_None(None, None, None) == []
 
 
-def code_for_path(path, instance_index, without_stderr):
-    if without_stderr:
-        return "%%(%d::%s).3f" % (instance_index, path)
-    else:
+def code_for_path(path, instance_index, spec_as_coefs):
+    if spec_as_coefs:
         return "@@%d::%s@@" % (instance_index, path)
+    else:
+        return "%%(%d::%s).3f" % (instance_index, path)
+
+
+def parse_coef(code):
+    m = re.match(r"^@@(\d+)::(.+)@@$", code)
+
+    if m is None:
+        return None
+
+    return (m.group(1), m.group(2))
+
+
+def is_coef(code):
+    return parse_coef(code) is not None
+
+
+def resolve_coef(code):
+    try:
+        a, b = parse_coef(code)
+    except TypeError:
+        return None
+
+    return ("%%(%s::coef::%s::est).3f" % (a, b),
+            "%%(%s::coef::%s::stars)s" % (a, b),
+            "%%(%s::coef::%s::se).4f" % (a, b))
+
+
+def is_float_format(code):
+    m = re.match(r"^%\([^)]+\)[0-9]*[.][0-9]+f$", code)
+
+    return m is not None
 
 
 def assemble_panels(
         spec_defs,
-        without_stderr,
+        spec_as_coefs,
         var_labels,
         panel_defs,
         footer_rows,
@@ -73,7 +104,8 @@ def assemble_panels(
             col_index += 1
 
             cells = [code_for_path(
-                         path, instance_index, without_stderr)
+                         path, instance_index, spec_as_coefs)
+                     if path else ""
                      for path in spec_defs[spec_id - 1]]
 
             if footer_rows:
@@ -90,8 +122,96 @@ def assemble_panels(
     return panels
 
 
-@argh.arg("--define-spec", type=str, nargs="+", action="append")
-@argh.arg("--define-spec-without-stderr", type=str, nargs="+", action="append")
+def rows_from(panel):
+    n_cols = len(panel)
+    n_rows = len(panel[0])
+
+    for j in xrange(n_rows):
+        yield tuple(panel[i][j] for i in xrange(n_cols))
+
+
+def csv_from(panels):
+    raise NotImplementedError(
+              "--output-as csv is not implemented yet.")
+
+
+def markdown_from(panels):
+    raise NotImplementedError(
+              "--output-as markdown is not implemented yet.")
+
+
+def latex_from(panels, without_coef_stars):
+    n_cols = len(panels[0])
+    n_rows = len(panels[0][0])
+    n_panels = len(panels)
+
+    #
+    # Header
+    #
+
+    code = (r"\begin{tabular}{l *{%d}{c}}" % (n_cols - 1)) + "\n"
+    code += r"\toprule" + "\n"
+
+    for i in xrange(1, n_cols):
+        code += " & (%d)" % i
+    code += r" \\" + "\n"
+
+    code += r"\midrule" + "\n"
+
+    #
+    # Panels
+    #
+
+    for panel_index, panel in enumerate(panels):
+        if n_panels > 1:
+            code += (r"& \multicolumn{%d}{c}{\em Panel %s} \\[1em]"
+                     % (n_cols - 1, chr(65 + panel_index))) + "\n"
+
+        # Body and footer
+        #
+
+        for row_index, row in enumerate(rows_from(panel)):
+            # TODO Escape LaTeX special characters.
+
+            this_line = ""
+            next_line = ""
+
+            if any(is_coef(cell) for cell in row[1:]):
+                this_line += row[0]
+
+                for cell in row[1:]:
+                    if not is_coef(cell):
+                        this_line += " & %s" % cell
+                        next_line += " & "
+                    else:
+                        est, stars, se = resolve_coef(cell)
+
+                        if without_coef_stars:
+                            this_line += " & $%s$" % est
+                        else:
+                            this_line += " & $%s$%s" % (est, stars)
+                        next_line += " & ($%s$)" % se
+
+                code += this_line + r" \\" + "\n"
+                code += next_line + r" \\[1em]" + "\n"
+            else:
+                this_line += row[0]
+
+                for cell in row[1:]:
+                    if is_float_format(cell):
+                        this_line += " & $%s$" % cell
+                    else:
+                        this_line += " & %s" % cell
+
+                code += this_line + r" \\" + "\n"
+
+    code += r"\bottomrule" + "\n"
+    code += r"\end{tabular}"
+
+    return code
+
+
+@argh.arg("--define-spec", type=str, nargs="+", required=True, action="append")
 @argh.arg("--var-labels", type=str, nargs="+", required=True)
 @argh.arg("--add-panel", type=int, nargs="+", action="append")
 @argh.arg("--add-footer-row", type=str, nargs="+", action="append")
@@ -100,21 +220,16 @@ def assemble_panels(
 @argh.arg("--output-as", type=str, required=True, choices=("csv", "markdown", "latex"))
 def dispatcher(
         define_spec=None,
-        define_spec_without_stderr=None,
+        spec_as_coefs=False,
+        without_coef_stars=False,
         var_labels=None,
         add_panel=None,
         add_footer_row=None,
         add_footer_var=None,
         footer_var_labels=None,
         output_as=None):
-    if not op.xor(define_spec is None,
-                  define_spec_without_stderr is None):
-        raise argh.exceptions.CommandError(
-                  "Must specify either --define-spec "
-                  + "or --define-spec-without-stderr "
-                  + "(and not both).")
-    elif op.xor(add_footer_var is None,
-                footer_var_labels is None):
+    if op.xor(add_footer_var is None,
+              footer_var_labels is None):
         raise argh.exceptions.CommandError(
                   "Must specify either both --add-footer-var "
                   + "and --footer-var-labels or neither.")
@@ -125,7 +240,6 @@ def dispatcher(
     if not consistent_item_count(
                *into_list_if_not_None(
                     define_spec,
-                    define_spec_without_stderr,
                     var_labels)):
         raise argh.exceptions.CommandError(
                   "Number of rows implied by specifications "
@@ -142,8 +256,8 @@ def dispatcher(
     spec_defs = define_spec or define_spec_without_stderr
 
     panels = assemble_panels(
-                 spec_defs=define_spec or define_spec_without_stderr,
-                 without_stderr=define_spec_without_stderr is not None,
+                 spec_defs=define_spec,
+                 spec_as_coefs=spec_as_coefs,
                  var_labels=var_labels,
                  panel_defs=add_panel,
                  footer_rows=add_footer_row,
@@ -152,15 +266,16 @@ def dispatcher(
 
     print panels
 
+    # TODO
+    # - Each of these views will need to be ready to resolve
+    #   @@*::*@@-type coefficient shorthands.
+    #
     if output_as == "csv":
-        raise NotImplementedError(
-                  "--output-as csv is not implemented yet.")
+        print csv_from(panels)
     elif output_as == "markdown":
-        raise NotImplementedError(
-                  "--output-as markdown is not implemented yet.")
+        print markdown_from(panels)
     else:
-        raise NotImplementedError(
-                  "--output-as latex is not implemented yet.")
+        print latex_from(panels, without_coef_stars)
 
 
 def main():
