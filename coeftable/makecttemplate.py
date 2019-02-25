@@ -116,12 +116,6 @@ def adapt(template, template_path, instance_index, path):
         start_pos += m.end()
 
 
-def is_float_format(code):
-    m = re.match(r"^%\([^)]+\)[0-9]*[.][0-9]+f$", code)
-
-    return m is not None
-
-
 def assemble_panels(
         spec_defs,
         var_labels,
