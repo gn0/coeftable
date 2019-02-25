@@ -1,11 +1,12 @@
 
 # coeftable
 
-This Python package provides two command-line tools to generate arbitrarily formatted tables from JSON data files.
+This Python package provides three command-line tools to generate arbitrarily formatted tables from JSON data files.
 The tools are:
 
 - `coeftable`: takes a template and a list of JSON data files, and generates the output.
 - `csv2textemplate`: takes a csv file, potentially with template shorthands, and converts it into a tex-formatted template for `coeftable` to use.
+- `makecttemplate` (beta): takes a set of parameters, and generates a template for `coeftable` to use.
 
 The JSON data files can contain regression results or results from hypothesis tests.
 If you are using Stata, the [json_this](https://github.com/gn0/json-this) package can save your results in JSON for you.
