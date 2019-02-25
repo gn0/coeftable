@@ -253,8 +253,6 @@ def dispatcher(
                   "Number of columns implied by panels and "
                   + "footer rows must be equal.")
 
-    spec_defs = define_spec or define_spec_without_stderr
-
     panels = assemble_panels(
                  spec_defs=define_spec,
                  spec_as_coefs=spec_as_coefs,
